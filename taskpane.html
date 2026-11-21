@@ -425,9 +425,9 @@ var GKC = (function () {
   }
 
   /* ---- Mã hóa / giải mã lõi phần mềm ---- */
-  async function encryptCore(Kb64, jsText) {
+  async function encryptCore(Kb64, jsText, ten) {
     var K = ub64u(Kb64), z = await gz(te.encode(jsText)), e = await aesEnc(await aesKey(K, ['encrypt']), z.d, 'GK-core-v1');
-    return '/* Lõi phần mềm Hồ sơ Giao khoán – đã mã hóa AES-256-GCM. Chỉ mở được bằng mã kích hoạt hợp lệ. */\nwindow.GK_CORE_ENC=' + JSON.stringify({ v: 1, kcv: await kcv(K), z: z.z, iv: b64u(e.iv), ct: b64u(e.ct) }) + ';\n';
+    return '/* Lõi phần mềm ' + (ten || (/var HD = \(function/.test(jsText) ? 'HỢP ĐỒNG A–B (repo hd.tcxd)' : 'GIAO KHOÁN TỔ ĐỘI (repo giaokhoan)')) + ' – đã mã hóa AES-256-GCM. Chỉ mở được bằng tài khoản hợp lệ. */\nwindow.GK_CORE_ENC=' + JSON.stringify({ v: 1, kcv: await kcv(K), z: z.z, iv: b64u(e.iv), ct: b64u(e.ct) }) + ';\n';
   }
   async function decryptCore(K, enc) {
     var d; try { d = await aesDec(await aesKey(K, ['decrypt']), ub64u(enc.iv), ub64u(enc.ct), 'GK-core-v1'); } catch (e) { fail('Gói phần mềm bị hỏng hoặc không khớp khóa.'); }
@@ -669,6 +669,7 @@ var HOST={
 
 async function mount(r){
  var js=await GKC.decryptCore(r.K,ENC);
+ if(!/var HD = \(function/.test(js)){r.K.fill(0);return fatal('File core.enc.js trên máy chủ KHÔNG phải của phần mềm Hợp đồng A–B (đang là lõi của phần mềm Giao khoán). Hãy tải lên repo hd.tcxd ĐÚNG các file trong gói PhatHanh_HopDongAB_….zip (nhất là core.enc.js), đợi 1–2 phút rồi bấm Ctrl+F5.')}
  DK=await GKC.dataKey(r.K);r.K.fill(0);
  LIC=r.lic;HOST.inExcel=inExcel;localStorage.removeItem('hd_lock');
  $('#gate').remove();
