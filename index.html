@@ -560,8 +560,148 @@ var CVS = (function () {
     document.addEventListener('click', function (ev) { if (!ev.target.closest('#cvPanel,#cvApps')) document.getElementById('cvPanel').classList.remove('on'); });
     probe();
   }
-  return { save: save, load: load, clear: clear, apps: list, openApp: open, probe: probe, mountUI: mountUI };
+  /* ---------- nút đồng bộ Google Drive ---------- */
+  function mountSync(SY) {
+    if (!SY || !SY.enabled() || document.getElementById('cvSync')) return;
+    var h = document.querySelector('header'), b = document.getElementById('cvApps'); if (!h) return;
+    var st = document.createElement('style'); st.textContent = '#cvSync{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);color:inherit;border-radius:16px;padding:3px 10px 3px 8px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;margin-left:8px;flex:none}#cvSync:hover{background:rgba(255,255,255,.2)}#cvSync i{font-style:normal;font-size:14px}#cvSync.chua,#cvSync.loi{background:#fff4e5;color:#7a4b00;border-color:#f0c36d}#cvSync.dang i{animation:cvspin 1s linear infinite;display:inline-block}@keyframes cvspin{to{transform:rotate(360deg)}}@media(max-width:760px){#cvSync span{display:none}}';
+    document.head.appendChild(st);
+    var btn = document.createElement('button'); btn.id = 'cvSync'; btn.type = 'button';
+    var h1 = h.querySelector('h1'); if (h1 && h1.nextSibling) h.insertBefore(btn, h1.nextSibling); else h.appendChild(btn);
+    function fmt(t) { var d = new Date(t); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
+    SY.on(function (s) {
+      btn.className = s.state; btn.title = (s.msg || '') + ' · Dữ liệu mã hóa được lưu trong Google Drive của bạn (thư mục ẩn của ứng dụng).';
+      btn.innerHTML = s.state === 'dang' ? '<i>⟳</i><span>Đang đồng bộ…</span>' : s.state === 'xong' ? '<i>☁</i><span>Đã đồng bộ ' + fmt(s.at) + '</span>' : s.state === 'loi' ? '<i>⚠</i><span>Lỗi đồng bộ</span>' : '<i>☁</i><span>Đồng bộ Google Drive</span>';
+    });
+    btn.addEventListener('click', function () { var s = SY.st(); (s.state === 'chua' || s.state === 'loi' ? SY.connect() : SY.now()).catch(function (e) { alert('Không đồng bộ được: ' + e.message); }); });
+    SY.start();
+  }
+  return { save: save, load: load, clear: clear, apps: list, openApp: open, probe: probe, mountUI: mountUI, mountSync: mountSync };
 })();
+
+/* ===== KHO DỮ LIỆU DÙNG CHUNG cho các phần mềm trên congviecxda.github.io =====
+ * - Nhiều hồ sơ cho mỗi phần mềm (P_ds = danh sách, P_doc_<id> = từng hồ sơ), mọi giá trị mã hóa bằng khóa dữ liệu (DK)
+ * - Danh mục công trình dùng chung: cv_ct
+ * - Chuyển giao giữa 2 phần mềm: cv_handoff
+ * - Đọc hồ sơ của phần mềm khác (cùng bộ khóa): docs.read('hd', id)
+ * - Đồng bộ Google Drive (thư mục ẩn appDataFolder của chính tài khoản Google của bạn) – dữ liệu vẫn ở dạng mã hóa
+ */
+function CVSTORE(X) {
+  'use strict';
+  var P = X.P, LS = localStorage, enc = function (t) { return GKC.encData(X.DK(), t); }, dec = function (r) { return GKC.decData(X.DK(), r); };
+  var SYNC_RE = /^(cv_ct|(gk|hd|qlct|vattu)_(ds|doc_[\w-]+|lib_[\w-]+))$/;
+  function now() { return Date.now(); }
+  function uid() { return 'h' + now().toString(36) + Math.random().toString(36).slice(2, 6); }
+  function meta() { try { return JSON.parse(LS.getItem('cv_meta') || '{}') || {}; } catch (e) { return {}; } }
+  function setMeta(m) { try { LS.setItem('cv_meta', JSON.stringify(m)); } catch (e) {} }
+  function touch(key, del) { if (!SYNC_RE.test(key)) return; var m = meta(); m[key] = del ? { t: now(), del: 1 } : { t: now() }; setMeta(m); SY.dirty(); }
+  function rawSet(key, v) { LS.setItem(key, v); touch(key); }
+  function rawDel(key) { LS.removeItem(key); touch(key, true); }
+  function getJ(key, def) { var r = LS.getItem(key); return r ? dec(r).then(function (t) { try { return JSON.parse(t); } catch (e) { return def; } }) : Promise.resolve(def); }
+  function setJ(key, o) { return enc(JSON.stringify(o)).then(function (e) { rawSet(key, e); }); }
+
+  /* ---------- hồ sơ ---------- */
+  var IDX = function (a) { return (a || P) + '_ds'; }, DOC = function (id, a) { return (a || P) + '_doc_' + id; }, CUR = P + '_cur';
+  var ready = (function migrate() {
+    var legacy = LS.getItem(X.SKEY);
+    if (!legacy || LS.getItem(IDX())) return Promise.resolve();
+    var id = uid();
+    LS.setItem(DOC(id), legacy); touch(DOC(id)); LS.setItem(CUR, id);
+    return setJ(IDX(), [{ id: id, ten: 'Hồ sơ đã lưu trước đây', tao: now(), sua: now() }]).then(function () { LS.setItem(X.SKEY + '_cu', legacy); LS.removeItem(X.SKEY); });
+  })();
+  function list(a) { return ready.then(function () { return getJ(IDX(a), []); }).then(function (L) { return (L || []).slice().sort(function (x, y) { return (y.sua || 0) - (x.sua || 0); }); }); }
+  function upd(id, m) { return getJ(IDX(), []).then(function (L) { L = L || []; var e = L.filter(function (x) { return x.id === id; })[0]; if (!e) { e = { id: id, tao: now() }; L.push(e); } Object.assign(e, m || {}, { sua: now() }); return setJ(IDX(), L); }); }
+  function cur() { return LS.getItem(CUR) || ''; }
+  var HAS_X = false;
+  var docs = {
+    list: list, cur: cur,
+    load: function () {
+      return ready.then(function () {
+        if (X.inExcel()) { var s = Office.context.document.settings, raw = s.get(X.SKEY), xid = s.get(X.SKEY + '_id'); if (raw) { HAS_X = true; if (xid) LS.setItem(CUR, xid); return dec(raw); } }
+        var id = cur(), r = id && LS.getItem(DOC(id));
+        if (r) return dec(r);
+        return list().then(function (L) { if (!L.length) return null; LS.setItem(CUR, L[0].id); var r2 = LS.getItem(DOC(L[0].id)); return r2 ? dec(r2) : null; });
+      });
+    },
+    save: function (text, m) {
+      return ready.then(function () {
+        var id = cur(); if (!id) { id = uid(); LS.setItem(CUR, id); }
+        return enc(text).then(function (e) {
+          rawSet(DOC(id), e);
+          var p = upd(id, m);
+          if (X.inExcel()) p = p.then(function () { return new Promise(function (res, rej) { var s = Office.context.document.settings; s.set(X.SKEY, e); s.set(X.SKEY + '_id', id); s.saveAsync(function (r) { r.status === Office.AsyncResultStatus.Succeeded ? res() : rej(new Error(r.error && r.error.message || 'Lỗi lưu')); }); }); });
+          return p;
+        });
+      });
+    },
+    open: function (id) { var r = LS.getItem(DOC(id)); if (!r) return Promise.reject(new Error('Không tìm thấy hồ sơ.')); LS.setItem(CUR, id); return dec(r); },
+    create: function (text, m) { var id = uid(); LS.setItem(CUR, id); return docs.save(text, m).then(function () { return id; }); },
+    remove: function (id) { return getJ(IDX(), []).then(function (L) { L = (L || []).filter(function (x) { return x.id !== id; }); rawDel(DOC(id)); if (cur() === id) LS.removeItem(CUR); return setJ(IDX(), L); }); },
+    read: function (a, id) { var r = LS.getItem(DOC(id, a)); return r ? dec(r).then(function (t) { return JSON.parse(t); }) : Promise.resolve(null); },
+    listOf: function (a) { return list(a); }
+  };
+  /* ---------- công trình dùng chung ---------- */
+  var ct = {
+    list: function () { return getJ('cv_ct', []).then(function (L) { return L || []; }); },
+    save: function (L) { return setJ('cv_ct', L || []); },
+    upsert: function (o) { return ct.list().then(function (L) { if (!o.id) o.id = 'ct' + uid().slice(1); var i = L.findIndex(function (x) { return x.id === o.id; }); if (i >= 0) L[i] = Object.assign(L[i], o, { sua: now() }); else L.push(Object.assign({ tao: now(), sua: now() }, o)); return ct.save(L).then(function () { return o; }); }); }
+  };
+  /* ---------- chuyển giao ---------- */
+  var handoff = {
+    put: function (o) { return enc(JSON.stringify(Object.assign({ t: now() }, o))).then(function (e) { LS.setItem('cv_handoff', e); }); },
+    take: function (to) { var r = LS.getItem('cv_handoff'); if (!r) return Promise.resolve(null); return dec(r).then(function (t) { var o = JSON.parse(t); if (to && o.to !== to) return null; LS.removeItem('cv_handoff'); if (now() - o.t > 30 * 60000) return null; return o; }).catch(function () { LS.removeItem('cv_handoff'); return null; }); }
+  };
+  var remoteFns = [];
+  function onRemote(fn) { remoteFns.push(fn); }
+
+  /* ---------- đồng bộ Google Drive (appDataFolder) ---------- */
+  var SY = (function () {
+    var CID = (X.cfg && X.cfg.gdrive) || '', FILE = 'congviec-dulieu.json', GIS = 'https://accounts.google.com/gsi/client', API = 'https://www.googleapis.com';
+    var st = { on: !!CID, state: CID ? 'chua' : 'tat', at: 0, msg: '' }, fns = [], tclient = null, timer = null, busy = false;
+    function emit() { fns.forEach(function (f) { try { f(st); } catch (e) {} }); }
+    function set(s, m) { st.state = s; st.msg = m || ''; if (s === 'xong') st.at = now(); emit(); }
+    function tok() { try { var t = JSON.parse(sessionStorage.getItem('cv_gtok') || 'null'); return t && t.exp > now() + 60000 ? t.tok : ''; } catch (e) { return ''; } }
+    function loadGIS() { if (window.google && google.accounts && google.accounts.oauth2) return Promise.resolve(); return new Promise(function (res, rej) { var s = document.createElement('script'); s.src = GIS; s.onload = function () { var n = 0; (function w() { if (window.google && google.accounts && google.accounts.oauth2) return res(); if (++n > 50) return rej(new Error('Không tải được Google')); setTimeout(w, 100); })(); }; s.onerror = function () { rej(new Error('Không tải được thư viện đăng nhập Google (kiểm tra Internet).')); }; document.head.appendChild(s); }); }
+    function connect() {
+      if (!CID) return Promise.reject(new Error('Chưa cấu hình Google Client ID (Công cụ chủ sở hữu → Đồng bộ Google Drive).'));
+      set('dang', 'Đang kết nối Google…');
+      return loadGIS().then(function () { return new Promise(function (res, rej) {
+        tclient = google.accounts.oauth2.initTokenClient({ client_id: CID, scope: 'https://www.googleapis.com/auth/drive.appdata', callback: function (r) { if (r && r.access_token) { sessionStorage.setItem('cv_gtok', JSON.stringify({ tok: r.access_token, exp: now() + (r.expires_in || 3600) * 1000 })); res(); } else rej(new Error((r && r.error) || 'Không cấp quyền')); }, error_callback: function (e) { rej(new Error((e && (e.message || e.type)) || 'Đã hủy kết nối')); } });
+        tclient.requestAccessToken({ prompt: LS.getItem('cv_gdrive_ok') ? '' : 'consent' });
+      }); }).then(function () { LS.setItem('cv_gdrive_ok', '1'); return now_(); }).catch(function (e) { set('loi', e.message); throw e; });
+    }
+    function api(path, o) { o = o || {}; o.headers = Object.assign({ Authorization: 'Bearer ' + tok() }, o.headers || {}); return fetch(API + path, o).then(function (r) { if (r.status === 401) { sessionStorage.removeItem('cv_gtok'); throw new Error('Phiên Google hết hạn – bấm ☁ để kết nối lại.'); } if (!r.ok) return r.text().then(function (t) { throw new Error('Google Drive lỗi ' + r.status + ': ' + t.slice(0, 120)); }); return r; }); }
+    function fileId() { var c = sessionStorage.getItem('cv_gfid'); if (c) return Promise.resolve(c); return api('/drive/v3/files?spaces=appDataFolder&fields=files(id,name)&q=' + encodeURIComponent("name='" + FILE + "'")).then(function (r) { return r.json(); }).then(function (j) { var f = (j.files || [])[0]; if (f) { sessionStorage.setItem('cv_gfid', f.id); return f.id; } return ''; }); }
+    function localSnap() { var m = meta(), items = {}; Object.keys(m).forEach(function (k) { if (!SYNC_RE.test(k)) return; if (m[k].del) items[k] = { t: m[k].t, del: 1 }; else { var v = LS.getItem(k); if (v != null) items[k] = { t: m[k].t, d: v }; } });
+      for (var i = 0; i < LS.length; i++) { var k = LS.key(i); if (SYNC_RE.test(k) && !items[k]) items[k] = { t: 1, d: LS.getItem(k) }; } return items; }
+    function now_() {
+      if (busy) return Promise.resolve(); if (!tok()) { set('chua', 'Bấm để kết nối Google Drive'); return Promise.resolve(); }
+      busy = true; set('dang', 'Đang đồng bộ…');
+      var changed = [];
+      return fileId().then(function (id) { return id ? api('/drive/v3/files/' + id + '?alt=media').then(function (r) { return r.json(); }).then(function (j) { return { id: id, j: j }; }) : { id: '', j: { items: {} } }; })
+        .then(function (R) {
+          var rem = (R.j && R.j.items) || {}, m = meta(), loc = localSnap();
+          Object.keys(rem).forEach(function (k) { if (!SYNC_RE.test(k)) return; var r = rem[k], l = m[k] || (LS.getItem(k) != null ? { t: 1 } : null); if (!l || r.t > l.t) { if (r.del) LS.removeItem(k); else LS.setItem(k, r.d); m[k] = r.del ? { t: r.t, del: 1 } : { t: r.t }; changed.push(k); } });
+          setMeta(m);
+          var out = localSnap(), need = !R.id || Object.keys(out).some(function (k) { return !rem[k] || out[k].t > rem[k].t; });
+          if (!need) return;
+          var body = JSON.stringify({ v: 1, app: 'congviecxda', t: now(), items: out });
+          if (!R.id) { var bd = 'cvb' + now(), mp = '--' + bd + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify({ name: FILE, parents: ['appDataFolder'] }) + '\r\n--' + bd + '\r\nContent-Type: application/json\r\n\r\n' + body + '\r\n--' + bd + '--';
+            return api('/upload/drive/v3/files?uploadType=multipart&fields=id', { method: 'POST', headers: { 'Content-Type': 'multipart/related; boundary=' + bd }, body: mp }).then(function (r) { return r.json(); }).then(function (j) { sessionStorage.setItem('cv_gfid', j.id); }); }
+          return api('/upload/drive/v3/files/' + R.id + '?uploadType=media', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: body });
+        })
+        .then(function () { busy = false; set('xong', 'Đã đồng bộ'); if (changed.length) remoteFns.forEach(function (f) { try { f(changed); } catch (e) { console.error(e); } }); })
+        .catch(function (e) { busy = false; set(tok() ? 'loi' : 'chua', e.message); });
+    }
+    function dirty() { if (!CID) return; clearTimeout(timer); if (!tok()) { if (st.state !== 'dang') set('chua', 'Có thay đổi chưa đồng bộ – bấm để kết nối Google Drive'); return; } timer = setTimeout(now_, 4000); }
+    function start() { if (CID && tok()) now_(); else if (CID) set('chua', LS.getItem('cv_gdrive_ok') ? 'Bấm để đồng bộ Google Drive' : 'Chưa kết nối Google Drive'); }
+    return { st: function () { return st; }, on: function (f) { fns.push(f); f(st); }, connect: connect, now: now_, dirty: dirty, start: start, enabled: function () { return !!CID; } };
+  })();
+
+  return { ready: ready, docs: docs, ct: ct, handoff: handoff, onRemote: onRemote, sync: SY,
+    libLoad: function (name) { var r = LS.getItem(P + '_lib_' + name); return r ? dec(r) : Promise.resolve(null); },
+    libSave: function (name, text) { return enc(text).then(function (e) { rawSet(P + '_lib_' + name, e); }); } };
+}
 
 </script>
 </head>
@@ -636,22 +776,22 @@ function failOnce(){var l=JSON.parse(localStorage.getItem('hd_lock')||'{"n":0,"t
 
 /* ---- Lưu trữ dữ liệu hồ sơ: mã hóa, nằm trong chính file Excel (document settings) ---- */
 var SKEY='hd_hoso_enc';
-var ANH_DB=null;
+var ANH_DB=null,ST=null;
 function anhOpen(){if(ANH_DB)return Promise.resolve(ANH_DB);return new Promise(function(res,rej){var r=indexedDB.open('hd-anh',1);r.onupgradeneeded=function(){r.result.createObjectStore('a')};r.onsuccess=function(){ANH_DB=r.result;res(ANH_DB)};r.onerror=function(){rej(r.error)}})}
 function anhTx(mode,fn){return anhOpen().then(function(db){return new Promise(function(res,rej){var tx=db.transaction('a',mode),q=fn(tx.objectStore('a'));tx.oncomplete=function(){res(q&&'result' in q?q.result:undefined)};tx.onerror=function(){rej(tx.error)};tx.onabort=function(){rej(tx.error||new Error('Lưu ảnh thất bại (bộ nhớ đầy?)'))}})})}
 var HOST={
  inExcel:false,
- loadData:function(){var raw=null;
-  if(HOST.inExcel){raw=Office.context.document.settings.get(SKEY)}
-  if(!raw&&!HOST.inExcel)raw=localStorage.getItem(SKEY);
-  return raw?GKC.decData(DK,raw):Promise.resolve(null)},
- saveData:function(text){return GKC.encData(DK,text).then(function(enc){
-  try{localStorage.setItem(HOST.inExcel?SKEY+'_saoluu':SKEY,enc)}catch(e){}
-  if(!HOST.inExcel)return;
-  return new Promise(function(res,rej){var s=Office.context.document.settings;s.set(SKEY,enc);s.saveAsync(function(r){r.status===Office.AsyncResultStatus.Succeeded?res():rej(new Error(r.error&&r.error.message||'Lỗi lưu'))})})})},
- /* thư viện dùng chung trên máy (danh bạ tổ trưởng…) – mã hóa, không phụ thuộc file Excel */
- libLoad:function(name){var raw=localStorage.getItem('hd_lib_'+name);return raw?GKC.decData(DK,raw):Promise.resolve(null)},
- libSave:function(name,text){return GKC.encData(DK,text).then(function(e){localStorage.setItem('hd_lib_'+name,e)})},
+ loadData:function(){return ST.docs.load()},
+ saveData:function(text,meta){return ST.docs.save(text,meta)},
+ /* thư viện dùng chung trên máy (danh bạ…) – mã hóa, đồng bộ Google Drive nếu bật */
+ libLoad:function(name){return ST.libLoad(name)},
+ libSave:function(name,text){return ST.libSave(name,text)},
+ /* nhiều hồ sơ · công trình dùng chung · chuyển giao giữa các phần mềm · đồng bộ */
+ docs:{list:function(a){return ST.docs.list(a)},cur:function(){return ST.docs.cur()},open:function(id){return ST.docs.open(id)},create:function(t,m){return ST.docs.create(t,m)},remove:function(id){return ST.docs.remove(id)},read:function(a,id){return ST.docs.read(a,id)},listOf:function(a){return ST.docs.listOf(a)}},
+ ct:{list:function(){return ST.ct.list()},save:function(L){return ST.ct.save(L)},upsert:function(o){return ST.ct.upsert(o)}},
+ handoff:{put:function(o){return ST.handoff.put(o)},take:function(to){return ST.handoff.take(to)}},
+ onRemote:function(f){ST.onRemote(f)},
+ sync:{st:function(){return ST.sync.st()},now:function(){return ST.sync.now()},connect:function(){return ST.sync.connect()},enabled:function(){return ST.sync.enabled()}},
  encryptExport:function(text){return GKC.encData(DK,text).then(function(e){return 'Ho so Hop dong A-B - du lieu ma hoa\n'+e+'\n'})},
  decryptImport:function(text){var t=String(text).trim();if(t.charAt(0)==='{'||t.charAt(0)==='[')return Promise.resolve(t);var m=/GKDATA1\.[\s\S]+/.exec(t);if(!m)return Promise.reject(new Error('File không đúng định dạng.'));return GKC.decData(DK,m[0])},
  /* kho ảnh (CCCD…) – IndexedDB trên máy, mỗi ảnh mã hóa AES-GCM bằng khóa dữ liệu */
@@ -670,11 +810,11 @@ var HOST={
 async function mount(r){
  var js=await GKC.decryptCore(r.K,ENC);
  if(!/var HD = \(function/.test(js)){r.K.fill(0);return fatal('File core.enc.js trên máy chủ KHÔNG phải của phần mềm Hợp đồng A–B (đang là lõi của phần mềm Giao khoán). Hãy tải lên repo hd.tcxd ĐÚNG các file trong gói PhatHanh_HopDongAB_….zip (nhất là core.enc.js), đợi 1–2 phút rồi bấm Ctrl+F5.')}
- DK=await GKC.dataKey(r.K);r.K.fill(0);
+ DK=await GKC.dataKey(r.K);ST=CVSTORE({P:'hd',SKEY:SKEY,DK:function(){return DK},inExcel:function(){return HOST.inExcel},cfg:CFG});await ST.ready;r.K.fill(0);
  LIC=r.lic;HOST.inExcel=inExcel;localStorage.removeItem('hd_lock');
  $('#gate').remove();
  document.body.insertAdjacentHTML('afterbegin',$('#appTpl').innerHTML);
- try{CVS.mountUI()}catch(e){console.warn(e)}
+ try{CVS.mountUI();CVS.mountSync(ST.sync)}catch(e){console.warn(e)}
  $('#licClose').onclick=function(){$('#lic').classList.remove('on')};
  $('#licOut').onclick=HOST.logout;
  if(LIC.han)setInterval(function(){if(Date.now()>GKC.endOfDay(LIC.han)){alert('Giấy phép đã hết hạn.');location.reload()}},3600000);
