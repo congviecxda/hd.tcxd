@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="X-UA-Compatible" content="IE=Edge">
-<title>Hồ sơ Giao khoán Nhân công</title>
+<title>Hợp đồng giao khoán A–B</title>
 <style>
 :root{--ink:#1d2433;--muted:#667085;--line:#e3e6ec;--bg:#f4f5f8;--card:#fff;--acc:#0f5c8c;--acc2:#e8f1f8;--warn:#b54708;--warnbg:#fff6ed;--err:#b42318;--errbg:#fef3f2;--ok:#067647}
 *{box-sizing:border-box}
@@ -269,6 +269,18 @@ body.rb-mini.rb-peek .rb-body{display:flex;position:absolute;left:0;right:0;top:
 .lawrow{display:flex;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;cursor:pointer}
 .lawrow .lt{font-size:12.5px;color:var(--muted);margin-bottom:4px}.lawrow .lo code{background:#fdecea;color:#912018;text-decoration:line-through}.lawrow .ln code{background:#ecfdf3;color:#05603a}
 .lawrow code{white-space:normal;font-size:12.5px;padding:1px 4px;border-radius:4px;line-height:1.6}
+.loai{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}
+.loai .lo{border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;display:block;background:#fafbfc}
+.loai .lo input{margin-right:6px}.loai .lo b{font-size:14px}.loai .lo span{display:block;font-size:12.5px;color:var(--muted);margin:4px 0 0 22px}
+.loai .lo.on{border-color:var(--acc);background:var(--acc2)}
+.s7{grid-column:span 7}.s9{grid-column:span 9}
+@media (max-width:760px){.s7,.s9{grid-column:span 6}}
+#tPL.plsplit{min-width:1280px}
+#imCol{width:auto;display:inline-block}
+.dkhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:3;background:var(--bg,#f4f6f9);padding:6px 0 4px}
+.dkhead h2{margin:0;flex:1}.dkbtn{display:flex;gap:8px;flex-wrap:wrap}
+.dkbtn button{padding:9px 14px;font-size:14px}.dkbtn .lawb{background:#fff7e6;border-color:#e8b74a;color:#7a4b00}
+.loai .lo input{width:auto!important;display:inline-block;margin:0 6px 0 0;vertical-align:middle}
 
 </style>
 <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
@@ -556,7 +568,7 @@ var CVS = (function () {
 <body>
 <div id="gate">
   <div class="box">
-    <h2>📑 Hồ sơ Giao khoán Nhân công</h2>
+    <h2>📜 Hợp đồng giao khoán A–B</h2>
     <p id="gOwner">Phần mềm có bản quyền.</p>
     <div id="gBusy" style="padding:20px 0;text-align:center;color:var(--muted)">Đang kiểm tra bản quyền…</div>
     <!-- Đăng nhập: một tài khoản duy nhất (chủ sở hữu), dùng trên mọi thiết bị -->
@@ -577,24 +589,23 @@ setTimeout(function(){if(!window.GKC){var b=document.getElementById('gBusy');if(
 </script>
 <template id="appTpl">
 <header>
-  <h1>📑 Hồ sơ Giao khoán Nhân công</h1>
+  <h1>📜 Hợp đồng giao khoán A–B</h1>
   <div class="proj" id="projName"></div>
   <div class="tb">
-    <button id="bNew" title="Tạo dự án trống">Mới</button>
-    <button id="bOpen" title="Mở file dự án .json đã lưu">Mở dự án</button>
-    <button id="bSave" title="Lưu dự án ra file .json">Lưu dự án</button>
-    <button id="bWb" title="Đọc dữ liệu từ các sheet của file Excel đang mở (mẫu công ty)" hidden>Đọc workbook này</button>
-    <button id="bXlsx" title="Đọc dữ liệu từ file Excel hồ sơ giao khoán theo mẫu công ty">Nhập file Excel</button>
-    <button id="bLic" title="Thông tin giấy phép">🔒</button>
+    <button id="bNew">Mới</button>
+    <button id="bOpen">Mở</button>
+    <button id="bSave">Lưu</button>
+    <button id="bLic">🔒</button>
   </div>
-  <input type="file" id="fOpen" accept=".gkp,.json" hidden>
+  <input type="file" id="fOpen" accept=".hdp,.json" hidden>
+  <input type="file" id="fDocx" accept=".docx" hidden>
   <input type="file" id="fXlsx" accept=".xlsx,.xlsm" hidden>
 </header>
 <div class="wrap">
   <nav id="nav"></nav>
   <main><div class="page" id="view"></div></main>
 </div>
-<div id="pv"><div class="bar"><b id="pvTitle"></b><button class="pri" id="pvPrint">🖨 In / Lưu PDF</button><button class="pri" id="pvWord">⬇ Tải Word (.docx)</button><button class="pri" id="pvXl" hidden>📥 Chèn vào Excel</button><button id="pvClose">Đóng</button></div><div class="scroll"><div id="pvBody"></div></div></div>
+<div id="pv"><div class="bar"><b id="pvTitle"></b><button class="pri" id="pvPrint">🖨 In / Lưu PDF</button><button class="pri" id="pvWord">⬇ Tải Word (.docx)</button><button class="pri" id="pvXl">⬇ Tải Excel (.xlsx)</button><button id="pvClose">Đóng</button></div><div class="scroll"><div id="pvBody"></div></div></div>
 <div class="toast" id="toast"></div>
 <iframe id="printFrame" style="position:absolute;width:0;height:0;border:0" title="print"></iframe>
 
@@ -620,13 +631,13 @@ function officeReady(){return new Promise(function(res){if(!window.Office||!Offi
 var USER='';
 function gkErr(m){var e=new Error(m);e.gk=true;return e}
 /* chống dò mật khẩu: sau 5 lần sai phải chờ */
-function lockLeft(){var l=JSON.parse(localStorage.getItem('gk_lock')||'{"n":0,"t":0}');return l.t>Date.now()?Math.ceil((l.t-Date.now())/1000):0}
-function failOnce(){var l=JSON.parse(localStorage.getItem('gk_lock')||'{"n":0,"t":0}');l.n++;if(l.n>=5){l.t=Date.now()+Math.min(600,30*Math.pow(2,l.n-5))*1000}localStorage.setItem('gk_lock',JSON.stringify(l))}
+function lockLeft(){var l=JSON.parse(localStorage.getItem('hd_lock')||'{"n":0,"t":0}');return l.t>Date.now()?Math.ceil((l.t-Date.now())/1000):0}
+function failOnce(){var l=JSON.parse(localStorage.getItem('hd_lock')||'{"n":0,"t":0}');l.n++;if(l.n>=5){l.t=Date.now()+Math.min(600,30*Math.pow(2,l.n-5))*1000}localStorage.setItem('hd_lock',JSON.stringify(l))}
 
 /* ---- Lưu trữ dữ liệu hồ sơ: mã hóa, nằm trong chính file Excel (document settings) ---- */
-var SKEY='gk_hoso_enc';
+var SKEY='hd_hoso_enc';
 var ANH_DB=null;
-function anhOpen(){if(ANH_DB)return Promise.resolve(ANH_DB);return new Promise(function(res,rej){var r=indexedDB.open('gk-anh',1);r.onupgradeneeded=function(){r.result.createObjectStore('a')};r.onsuccess=function(){ANH_DB=r.result;res(ANH_DB)};r.onerror=function(){rej(r.error)}})}
+function anhOpen(){if(ANH_DB)return Promise.resolve(ANH_DB);return new Promise(function(res,rej){var r=indexedDB.open('hd-anh',1);r.onupgradeneeded=function(){r.result.createObjectStore('a')};r.onsuccess=function(){ANH_DB=r.result;res(ANH_DB)};r.onerror=function(){rej(r.error)}})}
 function anhTx(mode,fn){return anhOpen().then(function(db){return new Promise(function(res,rej){var tx=db.transaction('a',mode),q=fn(tx.objectStore('a'));tx.oncomplete=function(){res(q&&'result' in q?q.result:undefined)};tx.onerror=function(){rej(tx.error)};tx.onabort=function(){rej(tx.error||new Error('Lưu ảnh thất bại (bộ nhớ đầy?)'))}})})}
 var HOST={
  inExcel:false,
@@ -639,9 +650,9 @@ var HOST={
   if(!HOST.inExcel)return;
   return new Promise(function(res,rej){var s=Office.context.document.settings;s.set(SKEY,enc);s.saveAsync(function(r){r.status===Office.AsyncResultStatus.Succeeded?res():rej(new Error(r.error&&r.error.message||'Lỗi lưu'))})})})},
  /* thư viện dùng chung trên máy (danh bạ tổ trưởng…) – mã hóa, không phụ thuộc file Excel */
- libLoad:function(name){var raw=localStorage.getItem('gk_lib_'+name);return raw?GKC.decData(DK,raw):Promise.resolve(null)},
- libSave:function(name,text){return GKC.encData(DK,text).then(function(e){localStorage.setItem('gk_lib_'+name,e)})},
- encryptExport:function(text){return GKC.encData(DK,text).then(function(e){return 'Ho so Giao khoan - du lieu ma hoa\n'+e+'\n'})},
+ libLoad:function(name){var raw=localStorage.getItem('hd_lib_'+name);return raw?GKC.decData(DK,raw):Promise.resolve(null)},
+ libSave:function(name,text){return GKC.encData(DK,text).then(function(e){localStorage.setItem('hd_lib_'+name,e)})},
+ encryptExport:function(text){return GKC.encData(DK,text).then(function(e){return 'Ho so Hop dong A-B - du lieu ma hoa\n'+e+'\n'})},
  decryptImport:function(text){var t=String(text).trim();if(t.charAt(0)==='{'||t.charAt(0)==='[')return Promise.resolve(t);var m=/GKDATA1\.[\s\S]+/.exec(t);if(!m)return Promise.reject(new Error('File không đúng định dạng.'));return GKC.decData(DK,m[0])},
  /* kho ảnh (CCCD…) – IndexedDB trên máy, mỗi ảnh mã hóa AES-GCM bằng khóa dữ liệu */
  imgPut:function(k,dataUrl){return GKC.encData(DK,dataUrl).then(function(e){return anhTx('readwrite',function(st){st.put(e,k)})})},
@@ -659,7 +670,7 @@ var HOST={
 async function mount(r){
  var js=await GKC.decryptCore(r.K,ENC);
  DK=await GKC.dataKey(r.K);r.K.fill(0);
- LIC=r.lic;HOST.inExcel=inExcel;localStorage.removeItem('gk_lock');
+ LIC=r.lic;HOST.inExcel=inExcel;localStorage.removeItem('hd_lock');
  $('#gate').remove();
  document.body.insertAdjacentHTML('afterbegin',$('#appTpl').innerHTML);
  try{CVS.mountUI()}catch(e){console.warn(e)}
@@ -676,13 +687,13 @@ async function boot(){
  if(!CFG.tk||!CFG.tk.h)return fatal('Bản phát hành chưa có tài khoản đăng nhập – hãy đóng gói lại bằng Công cụ chủ sở hữu bản mới.');
  inExcel=await officeReady();
  var ss=await CVS.load(CFG);if(ss){USER=ss.user;$('#gBusy').textContent='Đang mở phần mềm (đã đăng nhập)…';try{await mount(ss.r);return}catch(e){console.error(e);CVS.clear();location.reload();return}}
- var last=localStorage.getItem('gk_last_user')||'';$('#lUser').value=last;
+ var last=localStorage.getItem('hd_last_user')||'';$('#lUser').value=last;
  show('#gLogin');setTimeout(function(){(last?$('#lPass'):$('#lUser')).focus()},50);
 }
 document.addEventListener('click',async function(ev){var t=ev.target;if(t.id!=='lGo')return;
  err('#lErr','');var w=lockLeft();if(w)return err('#lErr','Nhập sai nhiều lần – thử lại sau '+w+' giây.');t.disabled=true;t.textContent='Đang kiểm tra…';
  try{var u=GKC.normSdt($('#lUser').value);if(!u)throw gkErr('Nhập tên đăng nhập.');
-  var r=await GKC.openAcc(CFG.tk.h,CFG.tk.e,u,$('#lPass').value,CFG);await CVS.save(CFG,u,r.inner);USER=u;localStorage.setItem('gk_last_user',u);await mount(r)}
+  var r=await GKC.openAcc(CFG.tk.h,CFG.tk.e,u,$('#lPass').value,CFG);await CVS.save(CFG,u,r.inner);USER=u;localStorage.setItem('hd_last_user',u);await mount(r)}
  catch(e){if(/Sai số điện thoại|không phải của số/.test(e.message)){failOnce();e=gkErr('Sai tên đăng nhập hoặc mật khẩu.')}console.error(e);err('#lErr',e.gk?e.message:'Lỗi: '+e.message);t.disabled=false;t.textContent='🔓 Đăng nhập'}
 });
 boot();
