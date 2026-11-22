@@ -1,4 +1,4 @@
-THƯ MỤC PHÁT HÀNH – HỢP ĐỒNG GIAO KHOÁN A–B 1.0.5.0
+THƯ MỤC PHÁT HÀNH – HỢP ĐỒNG GIAO KHOÁN A–B 1.0.7.0
 
 1. Đưa TOÀN BỘ thư mục này lên địa chỉ: https://congviecxda.github.io/hd.tcxd/
    (kiểm tra: mở https://congviecxda.github.io/hd.tcxd/ phải thấy màn hình đăng nhập)
